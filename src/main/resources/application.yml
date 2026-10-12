@@ -38,7 +38,7 @@ spring:
   jpa:
     open-in-view: false          # forces all data access into the service layer
     hibernate:
-      ddl-auto: validate          # Flyway owns the schema in every environment
+      ddl-auto: ${DB_DDL_AUTO:update}
     properties:
       hibernate:
         dialect: ${DB_DIALECT:org.hibernate.dialect.PostgreSQLDialect}
@@ -57,7 +57,7 @@ spring:
 
   # --------------------------------------------------------------- flyway
   flyway:
-    enabled: true
+    enabled: ${FLYWAY_ENABLED:false}
     baseline-on-migrate: true
     locations: classpath:db/migration
     validate-on-migrate: true
