@@ -149,7 +149,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(securityProperties.getAllowedOrigins());
+        List<String> origins = new ArrayList<>(securityProperties.getAllowedOrigins());
+        if (!origins.contains("https://frontend-inky-theta-28.vercel.app")) {
+            origins.add("https://frontend-inky-theta-28.vercel.app");
+        }
+        configuration.setAllowedOrigins(origins);
+        configuration.addAllowedOriginPattern("https://*.vercel.app");
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of(HttpHeaders.AUTHORIZATION, "X-Error-Code", "X-Request-Id"));
