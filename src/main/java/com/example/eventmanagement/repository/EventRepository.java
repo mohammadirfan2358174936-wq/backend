@@ -6,6 +6,7 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -18,27 +19,9 @@ import java.util.Optional;
 
 /**
  * EVENT REPOSITORY
- * ----------------
- * The performance-critical repository: every read the product does goes through
- * here, so every query is hand-tuned.
- *
- * Notes on the two hero queries:
- *
- * 1. `searchCards` — used for discovery and filters. Joins `organizer` and
- *    `category` into the same SQL statement (no N+1 on the card grid) and maps
- *    straight onto `EventCardProjection` columns, so Hibernate never hydrates
- *    full entities it would only re-project again. `countQuery` is provided
- *    explicitly because a `Page` needs a total row count that must ignore the
- *    `join fetch`.
- *
- * 2. `findByIdForUpdate` — **the anti-overbooking query.** `@Lock
- *    (PESSIMISTIC_WRITE)` makes this emit `SELECT ... FOR UPDATE`, so concurrent
- *    registrations serialise on the event row. The capacity check in the service
- *    layer then runs against a row nobody else can change until this
- *    transaction commits.
  */
 @Repository
-public interface EventRepository extends JpaRepository<Event, Long> {
+public interface EventRepository extends JpaRepository<Event, Long>, JpaSpecificationExecutor<Event> {
 
     /* ------------------------------------------------------------- lockings */
 

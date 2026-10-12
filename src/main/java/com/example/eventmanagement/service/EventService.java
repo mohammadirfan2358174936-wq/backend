@@ -33,7 +33,12 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.jpa.domain.Specification;
+
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
@@ -84,27 +89,61 @@ public class EventService {
     @Transactional(readOnly = true)
     public ApiResponse.PagedBody<EventCardResponse> discover(EventQueryParams params, User actor) {
         int size = params.sizeOrDefault(12, 100);
+        String sortField = params.sortField();
+        Sort.Direction direction = params.sortAscending() ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(
             params.pageOrZero(),
             size,
-            Sort.by(params.sortAscending() ? Sort.Direction.ASC : Sort.Direction.DESC, params.sortField()));
+            Sort.by(direction, sortField));
 
         Set<EventStatus> visible = visibilityFor(actor, params.status());
 
-        Page<Event> page = eventRepository.searchCards(
-            params.status(),
-            visible,
-            params.category(),
-            params.city(),
-            params.q(),
-            params.minPrice(),
-            params.maxPrice(),
-            params.from(),
-            params.to(),
-            params.featured(),
-            params.sortField(),
-            params.sortAscending(),
-            pageable);
+        Specification<Event> spec = (root, query, cb) -> {
+            if (Long.class != query.getResultType() && long.class != query.getResultType()) {
+                root.fetch("organizer", JoinType.LEFT);
+                root.fetch("category", JoinType.LEFT);
+                query.distinct(true);
+            }
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.isFalse(root.get("deleted")));
+            if (visible != null && !visible.isEmpty()) {
+                predicates.add(root.get("status").in(visible));
+            }
+            if (params.status() != null) {
+                predicates.add(cb.equal(root.get("status"), params.status()));
+            }
+            if (params.category() != null && !params.category().isBlank()) {
+                predicates.add(cb.equal(root.get("category").get("slug"), params.category().trim()));
+            }
+            if (params.city() != null && !params.city().isBlank()) {
+                predicates.add(cb.like(cb.lower(root.get("city")), "%" + params.city().toLowerCase().trim() + "%"));
+            }
+            if (params.q() != null && !params.q().isBlank()) {
+                String search = "%" + params.q().toLowerCase().trim() + "%";
+                predicates.add(cb.or(
+                    cb.like(cb.lower(root.get("title")), search),
+                    cb.like(cb.lower(root.get("description")), search)
+                ));
+            }
+            if (params.minPrice() != null) {
+                predicates.add(cb.ge(root.get("price"), params.minPrice()));
+            }
+            if (params.maxPrice() != null) {
+                predicates.add(cb.le(root.get("price"), params.maxPrice()));
+            }
+            if (params.from() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("startAt"), params.from()));
+            }
+            if (params.to() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("startAt"), params.to()));
+            }
+            if (params.featured() != null) {
+                predicates.add(cb.equal(root.get("featured"), params.featured()));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Page<Event> page = eventRepository.findAll(spec, pageable);
 
         return ApiResponse.paged(page, mapper::toCard,
             "Found %d event(s)".formatted(page.getTotalElements()));
